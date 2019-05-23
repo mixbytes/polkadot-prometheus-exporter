@@ -14,7 +14,7 @@ from time import sleep, time
 from signal import signal, SIGINT, SIGTERM
 import argparse
 
-from urllib3.exceptions import HTTPError
+from requests.exceptions import RequestException
 import requests
 from prometheus_client import start_http_server, Counter, Gauge
 
@@ -56,7 +56,8 @@ class _PolkadotRPC:
         try:
             result = requests.request("POST", self.rpc_url, data=json.dumps(request),
                                       headers={'content-type': 'application/json'})
-        except HTTPError:
+        except RequestException:
+            # TODO more fine-grained error handling
             self._counter_network_error.inc()
             return
 
