@@ -16,7 +16,7 @@ import argparse
 
 from requests.exceptions import RequestException
 import requests
-from prometheus_client import start_http_server, Counter, Gauge
+from prometheus_client import start_http_server, Counter, Gauge, Info
 
 
 class _PolkadotRPCError(RuntimeError):
@@ -33,15 +33,15 @@ class _PolkadotRPC:
 
         self._next_id = 1
 
-        self._counter_rpc_calls = Counter('exporter_rpc_calls', 'Total number of RPC calls made by metric exporter')
+        self._counter_rpc_calls = Counter('polkadot_exporter_rpc_calls', 'Total number of RPC calls made by metric exporter')
 
-        self._counter_network_error = Counter('exporter_rpc_network_error', 'RPC connectivity errors')
-        self._counter_unexpected_status = Counter('exporter_rpc_unexpected_status',
+        self._counter_network_error = Counter('polkadot_exporter_rpc_network_error', 'RPC connectivity errors')
+        self._counter_unexpected_status = Counter('polkadot_exporter_rpc_unexpected_status',
                                                   'RPC call unexpected HTTP status errors')
-        self._counter_4xx_error = Counter('exporter_rpc_4xx_error', 'RPC call HTTP 4xx errors')
-        self._counter_5xx_error = Counter('exporter_rpc_5xx_error', 'RPC call HTTP 5xx errors')
+        self._counter_4xx_error = Counter('polkadot_exporter_rpc_4xx_error', 'RPC call HTTP 4xx errors')
+        self._counter_5xx_error = Counter('polkadot_exporter_rpc_5xx_error', 'RPC call HTTP 5xx errors')
 
-        self._counter_request_error = Counter('exporter_rpc_error', 'RPC calls declined by Polkadot node')
+        self._counter_request_error = Counter('polkadot_exporter_rpc_error', 'RPC calls declined by Polkadot node')
 
     def request_nothrow(self, method, params=None):
         request = {
