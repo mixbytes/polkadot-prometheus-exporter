@@ -158,6 +158,16 @@ class HealthInfoUpdater(ExporterPeriodicTask):
         self._gauge_peers.set(health['peers'])
 
 
+class MemPoolUpdater(ExporterPeriodicTask):
+
+    def __init__(self, rpc):
+        super(MemPoolUpdater, self).__init__(rpc, 5*60)
+        self._gauge = Gauge('polkadot_pending_extrinsics', 'Polkadot pending extrinsics count as seen by a node')
+
+    def _perform_internal(self):
+        self._gauge.set(len(self._rpc.request('author_pendingExtrinsics')['result']))
+
+
 class Exporter:
     """
     The main exporter logic ties together metrics retrieval and metrics export.
@@ -181,7 +191,8 @@ class Exporter:
         self._counter_extrinsics_seen = Counter('polkadot_extrinsics',
                                                 'Number of extrinsics received by current node')
 
-        self._info_updaters = [SystemInfoUpdater(self._rpc), HealthInfoUpdater(self._rpc)]
+        self._info_updaters = [SystemInfoUpdater(self._rpc), HealthInfoUpdater(self._rpc),
+                               MemPoolUpdater(self._rpc)]
 
     def serve_forever(self):
         start_http_server(self.exporter_port, self.exporter_address)
