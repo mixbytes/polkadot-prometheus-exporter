@@ -9,14 +9,23 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND (express or implied).
 
+import sys
+import os
 import json
 from time import sleep, time
 from signal import signal, SIGINT, SIGTERM
 import argparse
+from abc import abstractmethod
 
 from requests.exceptions import RequestException
 import requests
 from prometheus_client import start_http_server, Counter, Gauge, Info
+
+if __name__ == '__main__':
+    # have to make sure we'll be able to find submodules
+    sys.path.append(os.path.realpath(os.path.dirname(os.path.dirname(__file__))))
+
+from polkadot_prometheus_exporter.utils import PeriodicTask
 
 
 class _PolkadotRPCError(RuntimeError):
@@ -87,6 +96,58 @@ class _PolkadotRPC:
         return result
 
 
+class ExporterPeriodicTask(PeriodicTask):
+    """
+    PeriodicTask shim which handles some common logic.
+    """
+
+    def __init__(self, rpc, period_seconds):
+        super(ExporterPeriodicTask, self).__init__(period_seconds)
+        self._rpc = rpc
+
+    def _perform(self):
+        try:
+            self._perform_internal()
+        except _PolkadotRPCError:
+            pass
+
+    @abstractmethod
+    def _perform_internal(self):
+        raise NotImplementedError()
+
+
+class SystemInfoUpdater(ExporterPeriodicTask):
+
+    def __init__(self, rpc):
+        super(SystemInfoUpdater, self).__init__(rpc, 5*60)
+        self._info = Info('polkadot_system', 'Polkadot system information')
+
+    def _perform_internal(self):
+        self._info.info({
+            'name': self._rpc.request('system_name')['result'],
+            'version': self._rpc.request('system_version')['result'],
+            'chain': self._rpc.request('system_chain')['result'],
+        })
+
+
+class HealthInfoUpdater(ExporterPeriodicTask):
+
+    def __init__(self, rpc):
+        super(HealthInfoUpdater, self).__init__(rpc, 1)
+        self._gauge_is_syncing = Gauge('polkadot_node_syncing',
+                                       '1 if a Polkadot node is syncing, 0 otherwise')
+        self._gauge_should_have_peers = Gauge('polkadot_node_should_have_peers',
+                                              '1 if a Polkadot node should have peers, 0 otherwise')
+        self._gauge_peers = Gauge('polkadot_node_peers', 'Number of peers')
+
+    def _perform_internal(self):
+        health = self._rpc.request('system_health')['result']
+
+        self._gauge_is_syncing.set(int(health['isSyncing']))
+        self._gauge_should_have_peers.set(int(health['shouldHavePeers']))
+        self._gauge_peers.set(health['peers'])
+
+
 class Exporter:
     """
     The main exporter logic ties together metrics retrieval and metrics export.
@@ -109,6 +170,8 @@ class Exporter:
                                             'Number of blocks received by current node')
         self._counter_extrinsics_seen = Counter('polkadot_extrinsics',
                                                 'Number of extrinsics received by current node')
+
+        self._info_updaters = [SystemInfoUpdater(self._rpc), HealthInfoUpdater(self._rpc)]
 
     def serve_forever(self):
         start_http_server(self.exporter_port, self.exporter_address)
@@ -134,6 +197,8 @@ class Exporter:
                 sleep(delay)
 
     def _step(self):
+        self._run_updaters()
+
         # optimization
         if (self._last_processed_block_hash is not None
                 and self._rpc.request('chain_getBlockHash')['result'] == self._last_processed_block_hash):
@@ -161,6 +226,12 @@ class Exporter:
             self._last_processed_block_num = _get_block_num(block)
 
             self._counter_extrinsics_seen.inc(len(block['result']['block']['extrinsics']))
+
+            self._run_updaters()
+
+    def _run_updaters(self):
+        for updater in self._info_updaters:
+            updater.run()
 
 
 def _get_block_num(rpc_block):
