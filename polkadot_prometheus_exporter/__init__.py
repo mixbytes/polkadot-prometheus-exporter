@@ -121,6 +121,7 @@ class SystemInfoUpdater(ExporterPeriodicTask):
     def __init__(self, rpc):
         super(SystemInfoUpdater, self).__init__(rpc, 5*60)
         self._info = Info('polkadot_system', 'Polkadot system information')
+        self._runtime_info = Info('polkadot_runtime', 'Polkadot runtime information')
 
     def _perform_internal(self):
         self._info.info({
@@ -128,6 +129,15 @@ class SystemInfoUpdater(ExporterPeriodicTask):
             'version': self._rpc.request('system_version')['result'],
             'chain': self._rpc.request('system_chain')['result'],
         })
+
+        runtime = self._rpc.request('state_getRuntimeVersion')['result']
+        for key in list(runtime):
+            if key not in ("authoringVersion", "implName", "implVersion", "specName", "specVersion"):
+                runtime.pop(key)
+            else:
+                runtime[key] = str(runtime[key])
+
+        self._runtime_info.info(runtime)
 
 
 class HealthInfoUpdater(ExporterPeriodicTask):
