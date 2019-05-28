@@ -1,5 +1,3 @@
-# Prometheus exporter for Polkadot relay chain node
-
 # Copyright (C) 2019  MixBytes, LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License").
