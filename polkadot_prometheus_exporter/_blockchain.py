@@ -7,7 +7,7 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND (express or implied).
 
-from polkadot_prometheus_exporter.rpc import get_block_num
+from polkadot_prometheus_exporter._rpc import get_block_num
 
 
 class BlockCache:

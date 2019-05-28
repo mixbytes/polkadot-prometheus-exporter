@@ -32,3 +32,8 @@ class PeriodicTask(ABC):
 
         self.__last_invocation_time = now
         self._perform()
+
+
+def check(condition, error_msg=None):
+    if not condition:
+        raise (RuntimeError() if error_msg is None else RuntimeError(error_msg))
