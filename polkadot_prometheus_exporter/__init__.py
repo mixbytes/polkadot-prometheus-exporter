@@ -101,6 +101,22 @@ class MemPoolUpdater(ExporterPeriodicTask):
         self._gauge.set(len(self._rpc.request('author_pendingExtrinsics')['result']))
 
 
+class FinalityInfoUpdater(ExporterPeriodicTask):
+
+    def __init__(self, rpc, cache):
+        super(FinalityInfoUpdater, self).__init__(rpc, 0.2)
+        self._cache = cache
+        self._gauge_final_block = Gauge('polkadot_final_block',
+                                        'Number of last finalized block')
+
+    def _perform_internal(self):
+        block_hash = self._rpc.request('chain_getFinalizedHead')['result']
+        if block_hash is not None:
+            block = self._cache.get(block_hash)
+            _check(block is not None, 'finalized block {} must not be none'.format(block_hash))
+            self._gauge_final_block.set(get_block_num(block))
+
+
 class Exporter:
     """
     The main exporter logic ties together metrics retrieval and metrics export.
@@ -127,7 +143,7 @@ class Exporter:
                                                 'Number of extrinsics received by current node')
 
         self._info_updaters = [SystemInfoUpdater(self._rpc), HealthInfoUpdater(self._rpc),
-                               MemPoolUpdater(self._rpc)]
+                               MemPoolUpdater(self._rpc), FinalityInfoUpdater(self._rpc, self._block_cache)]
 
     def serve_forever(self):
         start_http_server(self.exporter_port, self.exporter_address)
