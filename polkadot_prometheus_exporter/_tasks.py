@@ -9,7 +9,7 @@
 
 from abc import abstractmethod
 
-from prometheus_client import Gauge, Info
+from prometheus_client import Gauge, Info, Histogram
 
 from polkadot_prometheus_exporter._utils import PeriodicTask, check
 from polkadot_prometheus_exporter._rpc import PolkadotRPCError, get_block_num
@@ -95,9 +95,27 @@ class FinalityInfoUpdater(ExporterPeriodicTask):
         self._gauge_final_block = Gauge('polkadot_final_block',
                                         'Number of last finalized block')
 
+        self._gauge_finality_delay_blocks = Gauge('polkadot_finality_delay_blocks',
+                                                  'Difference in blocks between head and finalized blocks')
+        self._histogram_finality_delay_blocks = Histogram('polkadot_finality_delay_blocks_histogram',
+                                                          'Histogram of the difference in blocks between head and '
+                                                          'finalized blocks')
+
     def _perform_internal(self):
-        block_hash = self._rpc.request('chain_getFinalizedHead')['result']
-        if block_hash is not None:
-            block = self._cache.get(block_hash)
-            check(block is not None, 'finalized block {} must not be none'.format(block_hash))
-            self._gauge_final_block.set(get_block_num(block))
+        final_block_hash = self._rpc.request('chain_getFinalizedHead')['result']
+        latest_block_hash = self._rpc.request('chain_getBlockHash')['result']
+        if final_block_hash is None:
+            return
+
+        block = self._cache.get(final_block_hash)
+        check(block is not None, 'finalized block {} must not be none'.format(final_block_hash))
+        final_block_num = get_block_num(block)
+        self._gauge_final_block.set(final_block_num)
+
+        check(latest_block_hash is not None, 'head block is absent but finalized block isn\'t')
+        block = self._cache.get(latest_block_hash)
+        check(block is not None, 'head block {} must not be none'.format(latest_block_hash))
+        latest_block_num = get_block_num(block)
+
+        self._gauge_finality_delay_blocks.set(latest_block_num - final_block_num)
+        self._histogram_finality_delay_blocks.observe(latest_block_num - final_block_num)
